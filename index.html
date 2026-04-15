@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Block Blast PRO</title>
+
+<style>
+body {
+  background: #0f0f1a;
+  color: white;
+  text-align: center;
+  font-family: Arial;
+}
+
+h1 { margin: 10px; }
+
+#game {
+  display: grid;
+  grid-template-columns: repeat(8, 42px);
+  gap: 4px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.cell {
+  width: 42px;
+  height: 42px;
+  background: #1c1c2e;
+  border-radius: 8px;
+  transition: 0.2s;
+}
+
+.filled {
+  background: linear-gradient(45deg, #00f5a0, #00d9f5);
+}
+
+.clear {
+  animation: pop 0.25s;
+}
+
+@keyframes pop {
+  50% { transform: scale(1.3); background: white; }
+}
+
+#blocks {
+  margin-top: 20px;
+}
+
+.block {
+  display: inline-block;
+  margin: 10px;
+  padding: 8px;
+  background: #222;
+  border-radius: 10px;
+}
+
+.selected {
+  outline: 3px solid yellow;
+}
+
+.block-cell {
+  width: 16px;
+  height: 16px;
+  background: #00d9f5;
+  display: inline-block;
+  margin: 2px;
+  border-radius: 4px;
+}
+
+.row { height: 18px; }
+
+#gameOver {
+  display: none;
+  margin-top: 20px;
+  font-size: 22px;
+  color: red;
+}
+
+button {
+  padding: 10px 20px;
+  margin-top: 10px;
+  border: none;
+  background: #00d9f5;
+  color: black;
+  border-radius: 8px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🔥 Block Blast PRO</h1>
+<p>Puntaje: <span id="score">0</span></p>
+
+<div id="game"></div>
+<div id="blocks"></div>
+
+<div id="gameOver">
+  💀 GAME OVER
+  <br>
+  <button onclick="restart()">Reiniciar</button>
+</div>
+
+<script>
+const size = 8;
+let grid = Array(size * size).fill(0);
+let score = 0;
+let selectedShape = null;
+let blocksLeft = [];
+let combo = 1;
+
+// sonidos
+const placeSound = new Audio("https://actions.google.com/sounds/v1/cartoon/pop.ogg");
+const clearSound = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
+
+// formas
+const shapes = [
+  [[1,1],[1,1]],
+  [[1,1,1,1]],
+  [[1,0],[1,0],[1,1]],
+  [[1,1,1],[0,1,0]],
+  [[1],[1],[1]],
+];
+
+// crear grid
+const game = document.getElementById("game");
+
+for (let i = 0; i < size * size; i++) {
+  let div = document.createElement("div");
+  div.className = "cell";
+
+  div.onclick = () => {
+    if (selectedShape) placeShape(i);
+  };
+
+  game.appendChild(div);
+}
+
+// generar bloques
+function generateBlocks() {
+  const container = document.getElementById("blocks");
+  container.innerHTML = "";
+  blocksLeft = [];
+
+  for (let i = 0; i < 3; i++) {
+    let shape = shapes[Math.floor(Math.random()*shapes.length)];
+    blocksLeft.push(shape);
+
+    let block = document.createElement("div");
+    block.className = "block";
+
+    block.onclick = () => {
+      selectedShape = shape;
+      document.querySelectorAll(".block").forEach(b => b.classList.remove("selected"));
+      block.classList.add("selected");
+    };
+
+    shape.forEach(row => {
+      let rowDiv = document.createElement("div");
+      rowDiv.className = "row";
+
+      row.forEach(cell => {
+        let c = document.createElement("div");
+        if (cell) c.className = "block-cell";
+        rowDiv.appendChild(c);
+      });
+
+      block.appendChild(rowDiv);
+    });
+
+    container.appendChild(block);
+  }
+}
+
+// colocar
+function placeShape(index) {
+  let r0 = Math.floor(index / size);
+  let c0 = index % size;
+
+  // validar
+  for (let r = 0; r < selectedShape.length; r++) {
+    for (let c = 0; c < selectedShape[r].length; c++) {
+      if (selectedShape[r][c]) {
+        let nr = r0 + r;
+        let nc = c0 + c;
+
+        if (nr >= size || nc >= size) return;
+        if (grid[nr * size + nc]) return;
+      }
+    }
+  }
+
+  // colocar
+  selectedShape.forEach((row, r) => {
+    row.forEach((cell, c) => {
+      if (cell) {
+        let i = (r0 + r) * size + (c0 + c);
+        grid[i] = 1;
+      }
+    });
+  });
+
+  placeSound.play();
+
+  blocksLeft = blocksLeft.filter(b => b !== selectedShape);
+  selectedShape = null;
+
+  updateGrid();
+  clearLines();
+
+  if (blocksLeft.length === 0) generateBlocks();
+
+  checkGameOver();
+}
+
+// actualizar
+function updateGrid() {
+  document.querySelectorAll(".cell").forEach((cell, i) => {
+    cell.classList.toggle("filled", grid[i]);
+  });
+}
+
+// limpiar
+function clearLines() {
+  let cleared = 0;
+
+  for (let r = 0; r < size; r++) {
+    let full = true;
+    for (let c = 0; c < size; c++) {
+      if (!grid[r * size + c]) full = false;
+    }
+    if (full) {
+      cleared++;
+      for (let c = 0; c < size; c++) {
+        let i = r * size + c;
+        grid[i] = 0;
+        animate(i);
+      }
+    }
+  }
+
+  for (let c = 0; c < size; c++) {
+    let full = true;
+    for (let r = 0; r < size; r++) {
+      if (!grid[r * size + c]) full = false;
+    }
+    if (full) {
+      cleared++;
+      for (let r = 0; r < size; r++) {
+        let i = r * size + c;
+        grid[i] = 0;
+        animate(i);
+      }
+    }
+  }
+
+  if (cleared > 0) {
+    clearSound.play();
+    score += cleared * 20 * combo;
+    combo++;
+  } else {
+    combo = 1;
+  }
+
+  document.getElementById("score").innerText = score;
+  updateGrid();
+}
+
+// animación
+function animate(i) {
+  const cell = document.querySelectorAll(".cell")[i];
+  cell.classList.add("clear");
+  setTimeout(() => cell.classList.remove("clear"), 200);
+}
+
+// game over
+function checkGameOver() {
+  let canPlay = false;
+
+  for (let shape of blocksLeft) {
+    for (let i = 0; i < grid.length; i++) {
+      if (canPlace(i, shape)) {
+        canPlay = true;
+        break;
+      }
+    }
+  }
+
+  if (!canPlay) {
+    document.getElementById("gameOver").style.display = "block";
+  }
+}
+
+// validar jugada
+function canPlace(index, shape) {
+  let r0 = Math.floor(index / size);
+  let c0 = index % size;
+
+  for (let r = 0; r < shape.length; r++) {
+    for (let c = 0; c < shape[r].length; c++) {
+      if (shape[r][c]) {
+        let nr = r0 + r;
+        let nc = c0 + c;
+
+        if (nr >= size || nc >= size) return false;
+        if (grid[nr * size + nc]) return false;
+      }
+    }
+  }
+  return true;
+}
+
+// reiniciar
+function restart() {
+  grid.fill(0);
+  score = 0;
+  combo = 1;
+  document.getElementById("score").innerText = 0;
+  document.getElementById("gameOver").style.display = "none";
+  generateBlocks();
+  updateGrid();
+}
+
+generateBlocks();
+</script>
+
+</body>
+</html>
